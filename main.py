@@ -1,15 +1,15 @@
 import re
 import time
-import board
-import adafruit_dht
+""" import board
+import adafruit_dht """
 import asyncio
 import tempfile
 import os
 import speech_recognition as sr
 import edge_tts
 from datetime import datetime
-import ILI9225
-from pyILI9225 import color565
+""" import ILI9225
+from pyILI9225 import color565 """
 
 # --- Speech Recognition ---
 def recognize_speech():
@@ -41,26 +41,6 @@ async def speak(text):
     os.system(f"mpg123 {path}")
     os.remove(path)
 
-# --- DHT11 Sensor Reading ---
-def read_sensor(samples=10):
-    dht = adafruit_dht.DHT11(board.D4)
-    temps, hums = [], []
-    for _ in range(samples):
-        try:
-            t = dht.temperature
-            h = dht.humidity
-            print(f"Temp: {t}°C, Humid: {h}%")
-            temps.append(t)
-            hums.append(h)
-        except RuntimeError as err:
-            print(f"Sensor error: {err.args[0]}")
-            time.sleep(1)
-            continue
-        time.sleep(1)
-    dht.exit()
-    avg_t = sum(temps) / len(temps) if temps else None
-    avg_h = sum(hums) / len(hums) if hums else None
-    return {'temperature': avg_t, 'humidity': avg_h}
 
 # --- Intent Recognition & Entity Extraction ---
 def interpret_command(text):
@@ -85,7 +65,7 @@ def process_command(command):
     if intent == "sensor":
         data = read_sensor()
         if data['temperature'] is not None:
-            disp.fill_screen(color565(0, 0, 0))
+            """ disp.fill_screen(color565(0, 0, 0))
             disp.text(
                     x = 10, y = 10,
                     text = f"Temp: {data['temperature']:.1f}C",
@@ -99,7 +79,7 @@ def process_command(command):
                     size = 2,
                     color = color565(0, 255, 255),
                     background = color565(0, 0, 0)
-            )
+            ) """
             return f"The average temperature is {data['temperature']:.1f}°C and humidity is {data['humidity']:.1f}%."
         else:
             return "Sorry, I couldn't read the sensor data."
@@ -119,7 +99,7 @@ def process_command(command):
     else:
         return "I didn't understand your request."
 
-def init_display():
+""" def init_display():
     rst_pin = 17
     dc_pin = 27
     cs_pin = 8
@@ -132,12 +112,12 @@ def init_display():
             spi_speed_hz = 8000000,
             spi_bus = spi_dev
             )
-    return disp
+    return disp """
 
 # --- Main Program ---
 if __name__ == "__main__":
     print("Voice AI Chatbot Ready!")
-    disp = init_display()
+    #disp = init_display()
 
     command = recognize_speech()
     if command:
