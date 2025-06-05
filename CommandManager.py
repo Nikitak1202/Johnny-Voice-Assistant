@@ -1,30 +1,61 @@
 import speech_recognition as sr
 import re
 from datetime import datetime
+from DataManager import DataManager
 
-class DataManager:
-    def create_answer(self):
+class CommandManager:
+    # Initialization block: set up DataManager instance and speech recognition components
+    def __init__(self):
+        self.DataManager = DataManager()
+        self.SpeechRecognizer = sr.Recognizer()
+        self.Microphone = sr.Microphone()
+
+
+    def Start_Word_Detection(self):
+        # Start listening for the wake word ("Johhny") in a loop
+        with self.Microphone as source:
+            print("Listening for wake word...")
+            self.SpeechRecognizer.adjust_for_ambient_noise(source)
+            while True:
+                try:
+                    audio = self.SpeechRecognizer.listen(source, timeout=5)
+                    command = self.SpeechRecognizer.recognize_google(audio, language='en-US')
+                    if "Johhny" in command.lower():
+                        print("Wake word detected!")
+                        return True
+                    
+                except sr.UnknownValueError:
+                    print("Could not understand you.")
+                    return False
+                except sr.RequestError as e:
+                    print(f"API request error: {e}")
+                    return False
+                except sr.WaitTimeoutError:
+                    print("Listening timed out while waiting for phrase to start.")
+                    return False
+
+
+    # Main entry point for generating a response: recognize speech, process command, and return answer
+    def Create_Answer(self):
         # Step 1: Recognize speech from the microphone
-        command = self.recognize_speech()
+        command = self.Recognize_Speech()
         if not command:
-            return "Sorry, I didn't catch that."
+            return "Sorry, I didn't catch what you have said."
 
         # Step 2: Process the recognized command and form a response
-        answer = self.process_command(command)
+        answer = self.Process_Command(command)
         return answer
 
-    @staticmethod
-    def recognize_speech():
-        recognizer = sr.Recognizer()
-        mic = sr.Microphone()
-
-        with mic as source:
+    
+    # Speech recognition block: listen on the microphone and convert audio to text
+    def Recognize_Speech(self):
+        with self.Microphone as source:
             print("Speak...")
-            recognizer.adjust_for_ambient_noise(source)
-            audio = recognizer.listen(source)
+            self.SpeechRecognizer.adjust_for_ambient_noise(source)
+            audio = self.SpeechRecognizer.listen(source)
 
         try:
-            text = recognizer.recognize_google(audio, language='en-US')
+            text = self.SpeechRecognizer.recognize_google(audio, language='en-US')
             print("Recognized:", text)
             return text
         except sr.UnknownValueError:
@@ -34,9 +65,11 @@ class DataManager:
             print(f"API request error: {e}")
             return ""
 
-    @staticmethod
-    def interpret_command(text):
+    
+    # Intent interpretation block: determine user intent based on keywords in the recognized text
+    def Interpret_Command(self, text):
         text = text.lower()
+
         if any(word in text for word in ["temperature", "humidity", "weather"]):
             return "sensor"
         elif "time" in text:
@@ -46,34 +79,34 @@ class DataManager:
         else:
             return "unknown"
 
-    @staticmethod
-    def extract_expression(text):
+    
+    # Expression extraction block: isolate numbers and operators from the text for calculation
+    def Extract_Expression(self, text):
         match = re.findall(r'[\d\.]+|[+\-*/]', text)
         return " ".join(match) if match else ""
 
-    @staticmethod
-    def read_sensor():
-        # This is a placeholder function.
-        # Replace this stub with actual sensor reading logic as needed.
-        return {'temperature': 25.0, 'humidity': 50.0}
-
-    @staticmethod
-    def process_command(command):
-        intent = DataManager.interpret_command(command)
+    
+    # Command processing block: route to appropriate functionality based on detected intent
+    def Process_Command(self, command):
+        intent = CommandManager.Interpret_Command(command)
         
         if intent == "sensor":
-            data = DataManager.read_sensor()
-            if data['temperature'] is not None:
-                return f"The average temperature is {data['temperature']:.1f}°C and humidity is {data['humidity']:.1f}%."
+            # Sensor reading block: perform measurement and build response string
+            self.DataManager.Measure_MicroClimate()
+
+            if self.DataManager.temp is not None:
+                return f"The average temperature is {self.DataManager.temp:.1f}°C and humidity is {self.DataManager.humidity:.1f}%."
             else:
                 return "Sorry, I couldn't read the sensor data."
 
         elif intent == "time":
+            # Time reporting block: retrieve current system time and format it
             now = datetime.now()
             return f"The current time is {now.strftime('%H:%M:%S')}."
 
         elif intent == "calculate":
-            expression = DataManager.extract_expression(command)
+            # Calculation block: extract numeric expression, evaluate, and return result
+            expression = CommandManager.Extract_Expression(command)
             try:
                 result = eval(expression)
                 return f"The result of {expression} is {result}."
@@ -81,4 +114,5 @@ class DataManager:
                 return "Sorry, I couldn't understand the expression."
 
         else:
+            # Fallback block: handle unrecognized intents
             return "I didn't understand your request."
