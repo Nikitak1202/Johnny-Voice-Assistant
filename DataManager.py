@@ -1,10 +1,10 @@
 import time
-import board
+""" import board
 import adafruit_dht
 import busio
 from digitalio import DigitalInOut
 from adafruit_mcp3xxx.mcp3008 import MCP3008
-from adafruit_mcp3xxx.analog_in import AnalogIn, P0
+from adafruit_mcp3xxx.analog_in import AnalogIn, P0 """
 
 class DataManager:
     # Initialization block: set up attributes for temperature, humidity, and gas readings
@@ -23,7 +23,7 @@ class DataManager:
         
     # Gas reading stub: placeholder method for future gas sensor integration
     def ReadGas(self):
-        # SPI connection
+        """ # SPI connection
         spi = busio.SPI(clock=board.SCK, MISO=board.MISO, MOSI=board.MOSI)
         cs = DigitalInOut(board.D8)  # CE0
 
@@ -31,12 +31,13 @@ class DataManager:
         mcp = MCP3008(spi, cs)
         channel = AnalogIn(mcp, P0)
 
-        return [channel.value, channel.voltage]
+        return [channel.value, channel.voltage] """
+        return [None, None]
 
 
     # --- DHT11 Sensor Reading Block ---
     def ReadDHT11(self, samples=10):
-        # Initialize DHT11 sensor on specified board pin
+        """ # Initialize DHT11 sensor on specified board pin
         dht = adafruit_dht.DHT11(board.D4)
         temps, hums = [], []
         for _ in range(samples):
@@ -58,4 +59,5 @@ class DataManager:
         # Calculate average values if any readings succeeded
         avg_t = sum(temps) / len(temps) if temps else None
         avg_h = sum(hums) / len(hums) if hums else None
-        return [avg_t, avg_h]
+        return [avg_t, avg_h] """
+        return [None, None]

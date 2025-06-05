@@ -18,9 +18,9 @@ class CommandManager:
             self.SpeechRecognizer.adjust_for_ambient_noise(source)
             while True:
                 try:
-                    audio = self.SpeechRecognizer.listen(source, timeout=5)
+                    audio = self.SpeechRecognizer.listen(source, timeout=1)
                     command = self.SpeechRecognizer.recognize_google(audio, language='en-US')
-                    if "Johhny" in command.lower():
+                    if "start" in command.lower():
                         print("Wake word detected!")
                         return True
                     
@@ -88,7 +88,7 @@ class CommandManager:
     
     # Command processing block: route to appropriate functionality based on detected intent
     def Process_Command(self, command):
-        intent = CommandManager.Interpret_Command(command)
+        intent = self.Interpret_Command(command)
         
         if intent == "sensor":
             # Sensor reading block: perform measurement and build response string
@@ -106,7 +106,7 @@ class CommandManager:
 
         elif intent == "calculate":
             # Calculation block: extract numeric expression, evaluate, and return result
-            expression = CommandManager.Extract_Expression(command)
+            expression = self.Extract_Expression(command)
             try:
                 result = eval(expression)
                 return f"The result of {expression} is {result}."
