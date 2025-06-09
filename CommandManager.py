@@ -1,68 +1,99 @@
-# Handles speech I/O, intent parsing, sensor access and TTS
-import asyncio, os, re, tempfile, subprocess, speech_recognition as sr, edge_tts
-from datetime import datetime
+import asyncio
+import os
+import tempfile
+import speech_recognition as sr
+import edge_tts
 from DataManager import DataManager
+from nlp import NLP
+from CityInfo import CityInfo                      
+from CityInfo import CITY_TZ                       
+
 
 class CommandManager:
-    # Microphone, recogniser and sensor initialisation
-    def __init__(self):
-        self.dm = DataManager()
-        self.rec = sr.Recognizer()
-        self.mic = sr.Microphone()
+    def __init__(self, wake_word: str = "alice"):
+        self.DataManager = DataManager()
+        self.NLP = NLP()
+        self.CityInfo = CityInfo("486c05914b1d1a5c9ea00ce1568a64d6")  # < key
+        self.SpeechRecognizer = sr.Recognizer()
+        self.Microphone = sr.Microphone()
+        self.WakeWord = wake_word
+        print("--------------------------------------------------------------")
+        print("[DEBUG] CommandManager ready")
 
-    # Non-blocking speech recognition using a background thread
-    async def recognize_once(self):
-        def _sync_rec():
-            with self.mic as src:
-                self.rec.adjust_for_ambient_noise(src)
-                audio = self.rec.listen(src, timeout=5)
-            return self.rec.recognize_google(audio, language="en-US")
+
+    # ---------------- speech input ----------------
+    async def Listen_Phrase(self) -> str:
+        def sync_listen():
+            with self.Microphone as src:
+                self.SpeechRecognizer.adjust_for_ambient_noise(src)
+                audio = self.SpeechRecognizer.listen(src, timeout=8)
+            return self.SpeechRecognizer.recognize_google(audio, language="en-US")
+
         try:
-            return await asyncio.to_thread(_sync_rec)
+            phrase = await asyncio.to_thread(sync_listen)
+            print("--------------------------------------------------------------")
+            print(f"[DEBUG] Heard: {phrase}")
+            return phrase
         except (sr.UnknownValueError, sr.WaitTimeoutError):
+            print("--------------------------------------------------------------")
+            print("[DEBUG] Listen timeout / unintelligible")
+            return ""
+        except sr.RequestError as e:
+            print("--------------------------------------------------------------")
+            print(f"[DEBUG] Google STT error: {e}")
             return ""
 
-    # Intent routing and answer generation
-    async def process_command(self, text: str):
-        intent = self._interpret(text)
+
+    # ---------------- intent routing ---------------
+    async def Handle_Phrase(self, phrase: str) -> str:
+        lower = phrase.lower()
+        if self.WakeWord not in lower:
+            return ""
+
+        command_text = phrase[lower.find(self.WakeWord) + len(self.WakeWord):].strip()
+        if not command_text:
+            print("--------------------------------------------------------------")
+            print("[DEBUG] Wake word present but command empty")
+            return ""
+
+        print("--------------------------------------------------------------")
+        print(f"[DEBUG] Command: {command_text}")
+        intent = self.NLP.Interpret_Command(command_text)
+
         if intent == "sensor":
-            await self.dm.measure_microclimate()
-            if self.dm.temp is None:
+            await self.DataManager.Measure_MicroClimate()
+            if self.DataManager.temp is None:
                 return "Sorry, I couldn't read the sensor data."
-            air = "good" if self.dm.gas else "bad"
-            return (f"The average temperature is {self.dm.temp:.1f}�C and "
-                    f"humidity is {self.dm.humidity:.1f}%. Air quality is {air}.")
+            air = "good" if self.DataManager.gas else "bad"
+            return (f"The average temperature is {self.DataManager.temp:.1f}�C and "
+                    f"humidity is {self.DataManager.humidity:.1f}%. Air quality is {air}.")
+
         if intent == "time":
-            now = datetime.now()
-            return f"The current time is {now.strftime('%H:%M:%S')}."
+            city = self.NLP.Extract_City(command_text) or "Seoul"
+            return self.CityInfo.Get_Time(city)
+
+        if intent == "weather":
+            city = self.NLP.Extract_City(command_text) or "Seoul"
+            return await self.CityInfo.Get_Weather(city)
+
         if intent == "calculate":
-            expr = self._extract_expression(text)
+            expr = self.NLP.Extract_Expression(command_text)
             try:
                 return f"The result of {expr} is {eval(expr)}."
             except Exception:
                 return "Sorry, I couldn't understand the expression."
+
         return "I didn't understand your request."
 
-    # TTS generation and playback
-    async def speak(self, text: str):
+
+    # ---------------- TTS output -------------------
+    async def Speak(self, text: str):
+        print("--------------------------------------------------------------")
+        print(f"[DEBUG] Speaking: {text}")
         with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as fp:
             path = fp.name
+
         await edge_tts.Communicate(text, voice="en-US-JennyNeural").save(path)
         proc = await asyncio.create_subprocess_exec("mpg123", "-q", path)
         await proc.wait()
         os.remove(path)
-
-    # --- helpers ---
-    def _interpret(self, text: str):
-        t = text.lower()
-        if any(k in t for k in ("temperature", "humidity", "weather")):
-            return "sensor"
-        if "time" in t:
-            return "time"
-        if any(op in t for op in "+-*/") or "calculate" in t:
-            return "calculate"
-        return "unknown"
-
-    def _extract_expression(self, text: str):
-        tokens = re.findall(r"[\d.]+|[+\-*/]", text)
-        return " ".join(tokens)

@@ -1,23 +1,21 @@
-# Event-loop: listen > detect wake word > answer > speak
 import asyncio
 from CommandManager import CommandManager
 
-WAKE_WORD = "start"
 
 async def main():
-    cm = CommandManager()
+    Alice = CommandManager()
+
     while True:
-        phrase = await cm.recognize_once()
+        phrase = await Alice.Listen_Phrase()
         if not phrase:
             continue
-        low = phrase.lower()
-        if WAKE_WORD in low:
-            cmd = phrase[low.find(WAKE_WORD) + len(WAKE_WORD):].strip()
-            if not cmd:
-                continue
-            response = await cm.process_command(cmd)
-            print("Response:", response)
-            await cm.speak(response)
+
+        reply = await Alice.Handle_Phrase(phrase)
+        if reply:
+            print("───────────────────────────────────────────────────────────\n")
+            print(f"[DEBUG] Reply: {reply}")
+            await Alice.Speak(reply)
+
 
 if __name__ == "__main__":
     asyncio.run(main())
