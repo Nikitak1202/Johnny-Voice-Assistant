@@ -95,6 +95,11 @@ class CommandManager:
             self.DataManager.Measure_MicroClimate()
 
             if self.DataManager.temp is not None:
+                print(f"The average temperature is {self.DataManager.temp:.1f}°C and humidity is {self.DataManager.humidity:.1f}%.")
+                if not self.DataManager.gas:
+                    print("Air quality is bad")
+                else:
+                    print("Air quality is good")
                 return f"The average temperature is {self.DataManager.temp:.1f}°C and humidity is {self.DataManager.humidity:.1f}%."
             else:
                 return "Sorry, I couldn't read the sensor data."
