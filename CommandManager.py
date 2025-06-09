@@ -1,4 +1,7 @@
 import speech_recognition as sr
+import tempfile
+import edge_tts
+import os
 import re
 from datetime import datetime
 from DataManager import DataManager
@@ -12,7 +15,7 @@ class CommandManager:
 
 
     def Start_Word_Detection(self):
-        # Start listening for the wake word ("Johhny") in a loop
+        # Start listening for the wake word (start) in a loop
         with self.Microphone as source:
             print("Listening for wake word...")
             self.SpeechRecognizer.adjust_for_ambient_noise(source)
@@ -121,3 +124,13 @@ class CommandManager:
         else:
             # Fallback block: handle unrecognized intents
             return "I didn't understand your request."
+        
+
+    # --- Text-to-Speech ---
+    def Speak(self, text):
+        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as fp:
+            path = fp.name
+        communicate = edge_tts.Communicate(text, voice="en-US-JennyNeural")
+        communicate.save(path)
+        os.system(f"mpg123 {path}")
+        os.remove(path)

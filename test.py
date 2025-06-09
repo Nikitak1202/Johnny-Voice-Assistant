@@ -1,4 +1,3 @@
-import time
 from CommandManager import CommandManager
 
 # Main function block: initialize CommandManager and start the loop.
@@ -14,11 +13,7 @@ def main():
             print("Wake word detected. Processing command...")
             response = cmd_manager.Create_Answer()
             print("Response:", response)
-        else:
-            print("Wake word not detected, retrying...")
-            
-        # Delay before the next iteration to prevent rapid looping.
-        time.sleep(1)
+            cmd_manager.Speak(response)
 
 # Entry point block: start the main function.
 if __name__ == "__main__":

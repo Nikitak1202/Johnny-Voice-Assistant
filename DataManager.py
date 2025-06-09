@@ -1,8 +1,6 @@
 import time
 import board
 import adafruit_dht
-import busio
-from digitalio import DigitalInOut
 from gpiozero import DigitalInputDevice
 
 
