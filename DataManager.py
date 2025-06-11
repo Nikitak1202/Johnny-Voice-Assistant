@@ -1,6 +1,7 @@
 # Collects sensor data (DHT11 + gas GPIO)
 import asyncio
 import time
+import json
 import board
 import adafruit_dht
 from gpiozero import DigitalInputDevice
@@ -28,6 +29,12 @@ class DataManager:
         self.gas = await gas_task
         print("───────────────────────────────────────────────────────────\n")
         print(f"[DEBUG] Temp={self.temp}  Hum={self.humidity}  Gas={self.gas}")
+        #return json.dumps({"temperature": self.temp, "humidity": self.humidity, "gas": self.gas}
+        return json.dumps({
+            "temperature": self.temp,
+            "humidity": self.humidity,
+            "gas": self.gas
+        })
 
 
     # Return digital value from MQ-sensor pin (1 = clean air)
