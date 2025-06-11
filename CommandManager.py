@@ -5,98 +5,103 @@ from CityInfo import CityInfo
 
 
 class CommandManager:
+    """
+    Continuously listens for a wake-word (“start” by default).  
+    When the wake-word is heard, the current command task (if any) is cancelled
+    and the remainder of the sentence is processed as a new command.
+    """
+
     def __init__(self, wake_word: str = "start"):
+        # helpers / state --------------------------------------------------
+        self.WakeWord    = wake_word
+        self.Volume      = 80
+        self.running    = None                 # current Task
+
+        # subsystems -------------------------------------------------------
         self.DataManager = DataManager()
-        self.NLP = NLP()
-        self.CityInfo = CityInfo("486c05914b1d1a5c9ea00ce1568a64d6")
-        self.SpeechRecognizer = sr.Recognizer()
-        self.Microphone = sr.Microphone()
-        self.WakeWord = wake_word
-        self.Volume = 80
+        self.NLP         = NLP()
+        self.CityInfo    = CityInfo("486c05914b1d1a5c9ea00ce1568a64d6")
+        self.Rec         = sr.Recognizer()
+        self.Mic         = sr.Microphone()
+
         print("--------------------------------------------------------------")
-        print("[DEBUG] CommandManager ready")
+        print("[DEBUG] Command Manager is ready")
 
 
-    async def Listen_Phrase(self) -> str:
+    # =============== continuous microphone loop ==========================
+    async def Listen_Loop(self):
         def sync_listen():
-            with self.Microphone as src:
-                self.SpeechRecognizer.adjust_for_ambient_noise(src)
-                audio = self.SpeechRecognizer.listen(src, timeout=8)
-            return self.SpeechRecognizer.recognize_google(audio, language="en-US")
+            with self.Mic as src:
+                self.Rec.adjust_for_ambient_noise(src)
+                audio = self.Rec.listen(src, timeout=30)
+            return self.Rec.recognize_google(audio, language="en-US")
+
+        while True:
+            try:
+                phrase = await asyncio.to_thread(sync_listen)
+                print("--------------------------------------------------------------")
+                print(f"[DEBUG] Heard: {phrase}")
+                yield phrase
+            except (sr.UnknownValueError, sr.WaitTimeoutError):
+                print("--------------------------------------------------------------")
+                print("[DEBUG] Listen timeout / unintelligible")
+            except sr.RequestError as e:
+                print("--------------------------------------------------------------")
+                print(f"[DEBUG] Google STT error: {e}")
+
+
+    # =============== Executes one command; may be cancelled at any time ======================
+    async def Run_Command(self, command_text: str):
+        intent = self.NLP.Interpret_Command(command_text)
+        print("--------------------------------------------------------------")
+        print(f"[DEBUG] Intent: {intent}")
 
         try:
-            phrase = await asyncio.to_thread(sync_listen)
+            # --- sensor ---------------------------------------------------
+            if intent == "sensor":
+                await self.DataManager.Measure_MicroClimate()
+                if self.DataManager.temp is None:
+                    reply = "Sorry, I couldn't read the sensor data."
+                else:
+                    air = "good" if self.DataManager.gas else "bad"
+                    reply = (f"The average temperature is {self.DataManager.temp:.1f}°C and "
+                             f"humidity is {self.DataManager.humidity:.1f}%. Air quality is {air}.")
+
+            # --- time -----------------------------------------------------
+            elif intent == "time":
+                city  = self.NLP.Extract_City(command_text) or "Seoul"
+                reply = self.CityInfo.Get_Time(city)
+
+            # --- weather --------------------------------------------------
+            elif intent == "weather":
+                city  = self.NLP.Extract_City(command_text) or "Seoul"
+                reply = await self.CityInfo.Get_Weather(city)
+
+            # --- volume ---------------------------------------------------
+            elif intent == "volume":
+                reply = await self.handle_volume(command_text)
+
+            # --- math -----------------------------------------------------
+            elif intent == "calculate":
+                expr  = self.NLP.Extract_Expression(command_text)
+                try:
+                    reply = f"The result of {expr} is {eval(expr)}."
+                except Exception:
+                    reply = "Sorry, I couldn't understand the expression."
+
+            else:
+                reply = "I didn't understand your request."
+
             print("--------------------------------------------------------------")
-            print(f"[DEBUG] Heard: {phrase}")
-            return phrase
-        except (sr.UnknownValueError, sr.WaitTimeoutError):
-            print("--------------------------------------------------------------")
-            print("[DEBUG] Listen timeout / unintelligible")
-            return ""
-        except sr.RequestError as e:
-            print("--------------------------------------------------------------")
-            print(f"[DEBUG] Google STT error: {e}")
-            return ""
+            print(f"[DEBUG] Reply: {reply}")
+            await self.Speak(reply)
 
+        except asyncio.CancelledError:
+            # any long-running work or TTS is aborted instantly
+            print("[DEBUG] Command task cancelled")
+            raise
 
-    # ---------------- intent routing ---------------
-    async def Handle_Phrase(self, phrase: str) -> str:
-        lower = phrase.lower()
-        if self.WakeWord not in lower:
-            return ""
-
-        command_text = phrase[lower.find(self.WakeWord) + len(self.WakeWord):].strip()
-        if not command_text:
-            print("--------------------------------------------------------------")
-            print("[DEBUG] Wake word present but command empty")
-            return ""
-
-        print("--------------------------------------------------------------")
-        print(f"[DEBUG] Command: {command_text}")
-        intent = self.NLP.Interpret_Command(command_text)
-
-        if intent == "sensor":
-            await self.DataManager.Measure_MicroClimate()
-            if self.DataManager.temp is None:
-                return "Sorry, I couldn't read the sensor data."
-            air = "good" if self.DataManager.gas else "bad"
-            return (f"The average temperature is {self.DataManager.temp:.1f}°C and "
-                    f"humidity is {self.DataManager.humidity:.1f}%. Air quality is {air}.")
-
-        if intent == "time":
-            city = self.NLP.Extract_City(command_text) or "Seoul"
-            return self.CityInfo.Get_Time(city)
-
-        if intent == "weather":
-            city = self.NLP.Extract_City(command_text) or "Seoul"
-            return await self.CityInfo.Get_Weather(city)
-
-        if intent == "volume":
-            action = self.NLP.Extract_Volume(command_text)
-            if not action:
-                return "Sorry, I didn't get the volume level."
-            kind, value = action
-            if kind == "set":
-                self.Volume = max(0, min(100, value))
-            elif kind == "up":
-                self.Volume = min(100, self.Volume + value)
-            elif kind == "down":
-                self.Volume = max(0, self.Volume - value)
-
-            await self.Set_System_Volume(self.Volume)
-            return f"Volume set to {self.Volume} percent."
-
-        if intent == "calculate":
-            expr = self.NLP.Extract_Expression(command_text)
-            try:
-                return f"The result of {expr} is {eval(expr)}."
-            except Exception:
-                return "Sorry, I couldn't understand the expression."
-
-        return "I didn't understand your request."
-
-
-    # ---------------- TTS output -------------------
+    # =============== Generate TTS and speak ======================================
     async def Speak(self, text: str):
         print("--------------------------------------------------------------")
         print(f"[DEBUG] Speaking: {text}")
@@ -104,21 +109,39 @@ class CommandManager:
             path = fp.name
 
         await edge_tts.Communicate(text, voice="en-US-JennyNeural").save(path)
+
         proc = await asyncio.create_subprocess_exec(
-            "mpg123", "-q", "-a", "plughw:3,0", path,   # USB-спикер card3
+            "mpg123", "-q", "-a", "plughw:3,0", path,
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.DEVNULL,
         )
-        await proc.wait()
-        os.remove(path)
+        try:
+            await proc.wait()
+        finally:                               # ensure cleanup on cancel
+            proc.terminate()
+            os.remove(path)
 
+    # =============== volume helpers ======================================
+    async def handle_volume(self, text: str):
+        action = self.NLP.Extract_Volume(text)
+        if not action:
+            return "Sorry, I didn't get the volume level."
 
-    # ---------- helper to change ALSA mixer ----------
+        kind, value = action
+        if kind == "set":
+            self.Volume = max(0, min(100, value))
+        elif kind == "up":
+            self.Volume = min(100, self.Volume + value)
+        elif kind == "down":
+            self.Volume = max(0, self.Volume - value)
+
+        await self.Set_System_Volume(self.Volume)
+        return f"Volume set to {self.Volume} percent."
+
     async def Set_System_Volume(self, percent: int):
+        """Try common mixer controls; pick the first that works."""
         print("--------------------------------------------------------------")
-        print(f"[DEBUG] amixer > {percent}%")
-
-        # try common control names
+        print(f"[DEBUG] amixer → {percent}%")
         for ctl in ("Master", "PCM", "Speaker", "Headphone"):
             proc = await asyncio.create_subprocess_exec(
                 "amixer", "-q", "-c", "3", "set", ctl, f"{percent}%",
@@ -130,17 +153,14 @@ class CommandManager:
                 print(f"[DEBUG] volume control '{ctl}' OK")
                 return
 
-        # fallback: pick first available control
+        # fallback: first available simple control
         proc = await asyncio.create_subprocess_exec(
             "amixer", "-c", "3", "scontrols",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.DEVNULL,
         )
         out, _ = await proc.communicate()
-        first = (
-            out.decode().split("'")[1]  # 'Name',0 > ���� Name
-            if out else None
-        )
+        first = out.decode().split("'")[1] if out else None
         if first:
             await asyncio.create_subprocess_exec(
                 "amixer", "-q", "-c", "3", "set", first, f"{percent}%",

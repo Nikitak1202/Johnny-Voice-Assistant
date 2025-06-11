@@ -3,7 +3,7 @@ import aiohttp, requests
 from datetime import datetime, timedelta, timezone
 
 COUNTRY_CODES = {
-    "russia": "RU", "russian federation": "RU",
+    "russia": "RU", "russian federation": "RU", "rus": "RU",
     "united states": "US", "usa": "US", "us": "US",
     "united kingdom": "GB", "uk": "GB",
     "south korea": "KR", "korea": "KR", "republic of korea": "KR",
