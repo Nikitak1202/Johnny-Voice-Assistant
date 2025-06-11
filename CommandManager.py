@@ -1,27 +1,22 @@
-import asyncio
-import os
-import tempfile
-import speech_recognition as sr
-import edge_tts
+import asyncio, os, tempfile, speech_recognition as sr, edge_tts
 from DataManager import DataManager
 from nlp import NLP
-from CityInfo import CityInfo                      
-from CityInfo import CITY_TZ                       
+from CityInfo import CityInfo
 
 
 class CommandManager:
     def __init__(self, wake_word: str = "start"):
         self.DataManager = DataManager()
         self.NLP = NLP()
-        self.CityInfo = CityInfo("486c05914b1d1a5c9ea00ce1568a64d6")  # < key
+        self.CityInfo = CityInfo("486c05914b1d1a5c9ea00ce1568a64d6")
         self.SpeechRecognizer = sr.Recognizer()
         self.Microphone = sr.Microphone()
         self.WakeWord = wake_word
+        self.Volume = 80
         print("--------------------------------------------------------------")
         print("[DEBUG] CommandManager ready")
 
 
-    # ---------------- speech input ----------------
     async def Listen_Phrase(self) -> str:
         def sync_listen():
             with self.Microphone as src:
@@ -65,7 +60,7 @@ class CommandManager:
             if self.DataManager.temp is None:
                 return "Sorry, I couldn't read the sensor data."
             air = "good" if self.DataManager.gas else "bad"
-            return (f"The average temperature is {self.DataManager.temp:.1f}�C and "
+            return (f"The average temperature is {self.DataManager.temp:.1f}°C and "
                     f"humidity is {self.DataManager.humidity:.1f}%. Air quality is {air}.")
 
         if intent == "time":
@@ -75,6 +70,21 @@ class CommandManager:
         if intent == "weather":
             city = self.NLP.Extract_City(command_text) or "Seoul"
             return await self.CityInfo.Get_Weather(city)
+
+        if intent == "volume":
+            action = self.NLP.Extract_Volume(command_text)
+            if not action:
+                return "Sorry, I didn't get the volume level."
+            kind, value = action
+            if kind == "set":
+                self.Volume = max(0, min(100, value))
+            elif kind == "up":
+                self.Volume = min(100, self.Volume + value)
+            elif kind == "down":
+                self.Volume = max(0, self.Volume - value)
+
+            await self.Set_System_Volume(self.Volume)
+            return f"Volume set to {self.Volume} percent."
 
         if intent == "calculate":
             expr = self.NLP.Extract_Expression(command_text)
@@ -95,9 +105,48 @@ class CommandManager:
 
         await edge_tts.Communicate(text, voice="en-US-JennyNeural").save(path)
         proc = await asyncio.create_subprocess_exec(
-        "mpg123", "-q", "-a", "plughw:3,0",  # card 3, device 0
-        path,
-        stdout=asyncio.subprocess.DEVNULL,
-        stderr=asyncio.subprocess.DEVNULL)
+            "mpg123", "-q", "-a", "plughw:3,0", path,   # USB-спикер card3
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
         await proc.wait()
         os.remove(path)
+
+
+    # ---------- helper to change ALSA mixer ----------
+    async def Set_System_Volume(self, percent: int):
+        print("--------------------------------------------------------------")
+        print(f"[DEBUG] amixer > {percent}%")
+
+        # try common control names
+        for ctl in ("Master", "PCM", "Speaker", "Headphone"):
+            proc = await asyncio.create_subprocess_exec(
+                "amixer", "-q", "-c", "3", "set", ctl, f"{percent}%",
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            await proc.wait()
+            if proc.returncode == 0:
+                print(f"[DEBUG] volume control '{ctl}' OK")
+                return
+
+        # fallback: pick first available control
+        proc = await asyncio.create_subprocess_exec(
+            "amixer", "-c", "3", "scontrols",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        out, _ = await proc.communicate()
+        first = (
+            out.decode().split("'")[1]  # 'Name',0 > ���� Name
+            if out else None
+        )
+        if first:
+            await asyncio.create_subprocess_exec(
+                "amixer", "-q", "-c", "3", "set", first, f"{percent}%",
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            print(f"[DEBUG] volume control '{first}' OK")
+        else:
+            print("[DEBUG] no mixer control found")
