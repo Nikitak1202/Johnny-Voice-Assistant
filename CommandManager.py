@@ -10,7 +10,7 @@ from CityInfo import CITY_TZ
 
 
 class CommandManager:
-    def __init__(self, wake_word: str = "alice"):
+    def __init__(self, wake_word: str = "start"):
         self.DataManager = DataManager()
         self.NLP = NLP()
         self.CityInfo = CityInfo("486c05914b1d1a5c9ea00ce1568a64d6")  # < key
@@ -94,6 +94,10 @@ class CommandManager:
             path = fp.name
 
         await edge_tts.Communicate(text, voice="en-US-JennyNeural").save(path)
-        proc = await asyncio.create_subprocess_exec("mpg123", "-q", path)
+        proc = await asyncio.create_subprocess_exec(
+        "mpg123", "-q", "-a", "plughw:3,0",  # card 3, device 0
+        path,
+        stdout=asyncio.subprocess.DEVNULL,
+        stderr=asyncio.subprocess.DEVNULL)
         await proc.wait()
         os.remove(path)
