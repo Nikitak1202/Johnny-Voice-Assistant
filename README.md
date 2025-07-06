@@ -1,19 +1,59 @@
-# Johnny Voice Assistant
+# Smart Voice Assistant
 
-**Johnny** is an offline-first, extensible Python voice assistant that runs on Windows, macOS and Linux.  
-It combines speech recognition, natural-language parsing and text-to-speech to let you control your PC, query information and automate everyday tasks with simple voice commands.
+## Description
+This repository contains the Python implementation of a smart voice assistant using asyncio for asynchronous execution. It continuously listens for a wake-word (default "start"), interprets commands, and performs actions such as adjusting system volume, reporting weather and time, calculating mathematical expressions, and streaming sensor data (temperature, humidity, gas detection) through a WebSocket connection.
 
----
+## Features
+- **Voice Command Recognition**: Utilizes Google's Speech Recognition API.
+- **Command Interpretation (NLP)**: Parses voice commands into structured intents.
+- **Sensor Data Collection**: Measures temperature, humidity (DHT11), and air quality (MQ gas sensor).
+- **WebSocket Data Streaming**: Periodically sends collected sensor data to a specified WebSocket server.
+- **Text-to-Speech (TTS)**: Provides audio feedback using Edge TTS.
 
-## ✨  Key Features
-| Category | Details |
-|----------|---------|
-| **Speech I/O** | • Offline speech recognition (Vosk) <br> • High-quality TTS via pyttsx3 (cross-platform) |
-| **Command Manager** | Central `CommandManager` routes utterances to skills; add new commands with one function |
-| **Built-in Skills** | • Weather & city info<br>• System time & date<br>• Jokes / small talk<br>• Application launcher |
-| **Extensible** | Drop a new Python file in `./skills` or add a method in `CommandManager` to teach Johnny a new trick |
-| **Config-free start** | No cloud keys required for default setup; optional OpenWeatherMap key for richer forecasts |
-| **Cross-platform** | Runs wherever Python ≥ 3.8 is available |
+## Project Structure
+```
+├── CommandManager.py      # Core command handling logic
+├── DataManager.py         # Handles sensor data collection
+├── NLP.py                 # Natural language processing utilities
+├── CityInfo.py            # Retrieves weather and time information
+├── main.py                # Main executable script
+├── requirements.txt       # Required Python packages
+└── README.md              # Project description
+```
 
----
-> Tested on Python 3.11, but any 3.8+ interpreter should work.
+## Requirements
+- Python 3.10 or later
+- Packages listed in `requirements.txt`
+
+## Installation
+1. Clone the repository:
+```bash
+git clone <repository-url>
+cd <repository-directory>
+```
+
+2. Install dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+## Usage
+To run the voice assistant, execute:
+```bash
+python main.py
+```
+
+## Changing the Wake Word
+You can modify the wake word by editing the instantiation of `CommandManager` in `main.py`:
+```python
+cm = CommandManager(wake_word="your_wake_word")
+```
+
+## Data Streaming
+Sensor data is automatically sent every 60 seconds via WebSocket. You can adjust this interval by modifying `DATA_PUSH_INTERVAL` in `main.py`:
+```python
+DATA_PUSH_INTERVAL = 60  # Adjust as needed
+```
+
+## License
+This project is open-source and available under the MIT License.
