@@ -1,0 +1,19 @@
+# Speech recognition and microphone access
+SpeechRecognition>=3.8
+pyaudio>=0.2
+
+# Text-to-speech (Microsoft Edge voices)
+edge-tts>=6.1
+
+# Async WebSocket client
+websockets>=11.0
+
+# HTTP / REST clients
+aiohttp>=3.8
+requests>=2.31
+
+# Raspberry Pi GPIO and sensors
+adafruit-circuitpython-dht>=4.5
+adafruit-blinka>=8.0
+gpiozero>=1.6
+RPi.GPIO>=0.7     # only required when running on a real Pi
