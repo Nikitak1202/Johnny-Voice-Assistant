@@ -28,8 +28,10 @@ This repository contains the Python implementation of a smart voice assistant us
 ## Installation
 1. Clone the repository:
 ```bash
-git clone <repository-url>
-cd <repository-directory>
+git clone https://github.com/Nikitak1202/Johnny-Voice-Assistant.git
+cd Johnny-Voice-Assistant
+python -m venv venv
+source venv/bin/activate
 ```
 
 2. Install dependencies:
@@ -54,6 +56,3 @@ Sensor data is automatically sent every 60 seconds via WebSocket. You can adjust
 ```python
 DATA_PUSH_INTERVAL = 60  # Adjust as needed
 ```
-
-## License
-This project is open-source and available under the MIT License.
