@@ -13,7 +13,7 @@ aiohttp>=3.8
 requests>=2.31
 
 # Raspberry Pi GPIO and sensors
-adafruit-circuitpython-dht>=4.5
+adafruit-circuitpython-dht>=4.0.9
 adafruit-blinka>=8.0
 gpiozero>=1.6
 RPi.GPIO>=0.7     # only required when running on a real Pi

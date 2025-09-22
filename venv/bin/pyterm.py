@@ -1,4 +1,4 @@
-#!/home/team7/project/Johnny-Voice-Assistant/venv/bin/python3
+#!/home/pi/Desktop/Johnny-Voice-Assistant/venv/bin/python
 
 """Simple Python serial terminal
 """

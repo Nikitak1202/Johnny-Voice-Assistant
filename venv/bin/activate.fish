@@ -33,7 +33,7 @@ end
 # Unset irrelevant variables.
 deactivate nondestructive
 
-set -gx VIRTUAL_ENV "/home/team7/project/Johnny-Voice-Assistant/venv"
+set -gx VIRTUAL_ENV "/home/pi/Desktop/Johnny-Voice-Assistant/venv"
 
 set -gx _OLD_VIRTUAL_PATH $PATH
 set -gx PATH "$VIRTUAL_ENV/bin" $PATH

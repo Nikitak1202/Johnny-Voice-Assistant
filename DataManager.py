@@ -15,19 +15,19 @@ class DataManager:
 
         self.DHT11Pin = board.D17          # GPIO-17
         self.GasPin = 27                   # GPIO-27
-        print("───────────────────────────────────────────────────────────\n")
+        print("------------------------------------------------------------------------\n")
         print("[DEBUG] DataManager initialised")
 
 
     # Parallel read of DHT11 and gas sensor
     async def Measure_MicroClimate(self):
-        print("───────────────────────────────────────────────────────────\n")
+        print("------------------------------------------------------------------------\n")
         print("[DEBUG] Measuring micro-climate")
         dht_task = asyncio.create_task(self.ReadDHT11())
         gas_task = asyncio.create_task(self.ReadGas())
         self.temp, self.humidity = await dht_task
         self.gas = await gas_task
-        print("───────────────────────────────────────────────────────────\n")
+        print("------------------------------------------------------------------------\n")
         print(f"[DEBUG] Temp={self.temp}  Hum={self.humidity}  Gas={self.gas}")
         #return json.dumps({"temperature": self.temp, "humidity": self.humidity, "gas": self.gas}
         return json.dumps({
@@ -52,7 +52,7 @@ class DataManager:
                     temps.append(dht.temperature)
                     hums.append(dht.humidity)
                 except RuntimeError as err:
-                    print("───────────────────────────────────────────────────────────\n")
+                    print("------------------------------------------------------------------------\n")
                     print(f"[DEBUG] DHT11 error: {err.args[0]}")
                     time.sleep(1)
                     continue

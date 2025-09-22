@@ -1,4 +1,4 @@
-#!/home/team7/project/Johnny-Voice-Assistant/venv/bin/python3
+#!/home/pi/Desktop/Johnny-Voice-Assistant/venv/bin/python
 # -*- coding: utf-8 -*-
 
 # Copyright (c) 2018-2024, Emmanuel Blot <emmanuel.blot@free.fr>
