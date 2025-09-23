@@ -2,6 +2,7 @@ import asyncio, os, tempfile, speech_recognition as sr, edge_tts
 from DataManager import DataManager
 from nlp import NLP
 from CityInfo import CityInfo
+from Disp import Disp
 
 
 class CommandManager:
@@ -23,9 +24,16 @@ class CommandManager:
         self.CityInfo    = CityInfo("486c05914b1d1a5c9ea00ce1568a64d6")
         self.Rec         = sr.Recognizer()
         self.Mic         = sr.Microphone()
+        self.Display     = Disp()
 
         print("--------------------------------------------------------------")
         print("[DEBUG] Command Manager is ready")
+
+    async def start(self):
+        await self.Display.start()
+
+    async def stop(self):
+        await self.Display.stop()
 
 
     # =============== continuous microphone loop ==========================
@@ -57,29 +65,42 @@ class CommandManager:
         print(f"[DEBUG] Intent: {intent}")
 
         try:
+            display_task = None
             # --- sensor ---------------------------------------------------
             if intent == "sensor":
                 await self.DataManager.Measure_MicroClimate()
+                await self.Display.update_air_quality(self.DataManager.gas)
                 if self.DataManager.temp is None:
                     reply = "Sorry, I couldn't read the sensor data."
                 else:
                     air = "good" if self.DataManager.gas else "bad"
                     reply = (f"The average temperature is {self.DataManager.temp:.1f}°C and "
                              f"humidity is {self.DataManager.humidity:.1f}%. Air quality is {air}.")
+                display_task = asyncio.create_task(
+                    self.Display.show_sensor(self.DataManager.temp, self.DataManager.humidity)
+                )
 
             # --- time -----------------------------------------------------
             elif intent == "time":
                 city  = self.NLP.Extract_City(command_text) or "Seoul"
-                reply = self.CityInfo.Get_Time(city)
+                info  = self.CityInfo.Get_Time_Info(city)
+                reply = info["speech"]
+                display_task = asyncio.create_task(
+                    self.Display.show_city_time(info.get("hour"), info.get("minute"))
+                )
 
             # --- weather --------------------------------------------------
             elif intent == "weather":
                 city  = self.NLP.Extract_City(command_text) or "Seoul"
-                reply = await self.CityInfo.Get_Weather(city)
+                info  = await self.CityInfo.Get_Weather_Info(city)
+                reply = info["speech"]
+                display_task = asyncio.create_task(self.Display.show_weather(info))
 
             # --- volume ---------------------------------------------------
             elif intent == "volume":
                 reply = await self.handle_volume(command_text)
+                if reply.lower().startswith("volume set"):
+                    display_task = asyncio.create_task(self.Display.show_volume(self.Volume))
 
             # --- math -----------------------------------------------------
             elif intent == "calculate":
@@ -94,7 +115,11 @@ class CommandManager:
 
             print("--------------------------------------------------------------")
             print(f"[DEBUG] Reply: {reply}")
-            await self.Speak(reply)
+            speak_task = asyncio.create_task(self.Speak(reply))
+            if display_task:
+                await asyncio.gather(speak_task, display_task)
+            else:
+                await speak_task
 
         except asyncio.CancelledError:
             # any long-running work or TTS is aborted instantly
