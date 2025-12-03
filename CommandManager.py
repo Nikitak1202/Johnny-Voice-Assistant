@@ -71,7 +71,7 @@ class CommandManager:
                     yield phrase
                 except (sr.UnknownValueError, sr.WaitTimeoutError):
                     print("--------------------------------------------------------------")
-                    print("[DEBUG] Listen timeout / unintelligible")
+                    #print("[DEBUG] Listen timeout / unintelligible")
                 except sr.RequestError as e:
                     print("--------------------------------------------------------------")
                     print(f"[DEBUG] Google STT error: {e}")
