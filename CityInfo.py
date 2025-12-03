@@ -21,7 +21,7 @@ class CityInfo:
         print("[DEBUG] CityInfo ready")
 
     # ---------------- weather (always HTTP) ----------------
-    async def Get_Weather(self, location: str = "Seoul") -> str:
+    async def Get_Weather_Info(self, location: str = "Seoul") -> dict:
         city, cc, country_raw = self.split_location(location)
 
         params = self.params(city, cc)
@@ -29,18 +29,43 @@ class CityInfo:
             async with sess.get(self.base_url, params=params) as r:
                 data = await r.json()
 
-        if data.get("cod") != 200:
-            return f"Sorry, I couldn't find weather for {location}."
-
-        main = data["main"]
-        desc = data["weather"][0]["description"]
-        temp = main["temp"]
-        hum  = main["humidity"]
         pretty = f"{city.title()}{', '+country_raw if country_raw else ''}"
-        return f"Weather in {pretty}: {temp:.1f} degrees, humidity {hum}%, {desc}."
+
+        if data.get("cod") != 200:
+            return {
+                "speech": f"Sorry, I couldn't find weather for {location}.",
+                "ok": False,
+                "city": pretty,
+                "temp": None,
+                "humidity": None,
+                "condition": "unknown",
+                "description": "",
+            }
+
+        weather_entry = data["weather"][0]
+        main = data["main"]
+        desc = weather_entry.get("description", "")
+        temp = main.get("temp")
+        hum = main.get("humidity")
+        condition = weather_entry.get("main", "unknown")
+
+        speech = f"Weather in {pretty}: {temp:.1f} degrees, humidity {hum}%, {desc}."
+        return {
+            "speech": speech,
+            "ok": True,
+            "city": pretty,
+            "temp": temp,
+            "humidity": hum,
+            "condition": condition,
+            "description": desc,
+        }
+
+    async def Get_Weather(self, location: str = "Seoul") -> str:
+        info = await self.Get_Weather_Info(location)
+        return info["speech"]
 
     # ---------------- time (uses cache) --------------------
-    def Get_Time(self, location: str = "Seoul") -> str:
+    def Get_Time_Info(self, location: str = "Seoul") -> dict:
         city, cc, country_raw = self.split_location(location)
         key      = self.cache_key(city, cc)
         data     = self.time_cache.get(key)
@@ -51,16 +76,39 @@ class CityInfo:
                     self.base_url, params=self.params(city, cc), timeout=4
                 ).json()
                 if data.get("cod") != 200:
-                    return f"Sorry, I don't know the timezone for {location}."
+                    return {
+                        "speech": f"Sorry, I don't know the timezone for {location}.",
+                        "ok": False,
+                        "city": location,
+                        "hour": None,
+                        "minute": None,
+                    }
                 self.time_cache[key] = data
                 print("[DEBUG] CityInfo cached new city:", location)
             except requests.RequestException:
-                return f"Sorry, I don't know the timezone for {location}."
+                return {
+                    "speech": f"Sorry, I don't know the timezone for {location}.",
+                    "ok": False,
+                    "city": location,
+                    "hour": None,
+                    "minute": None,
+                }
 
         offset = int(data.get("timezone", 0))
         local  = datetime.now(timezone.utc) + timedelta(seconds=offset)
         pretty = f"{city.title()}{', '+country_raw if country_raw else ''}"
-        return f"Time in {pretty} is {local.hour} hours, {local.minute} minutes."
+        speech = f"Time in {pretty} is {local.hour} hours, {local.minute} minutes."
+        return {
+            "speech": speech,
+            "ok": True,
+            "city": pretty,
+            "hour": local.hour,
+            "minute": local.minute,
+        }
+
+    def Get_Time(self, location: str = "Seoul") -> str:
+        info = self.Get_Time_Info(location)
+        return info["speech"]
 
     # ---------- helper: build params ---------------
     def params(self, city: str, cc: str | None):

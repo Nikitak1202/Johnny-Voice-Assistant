@@ -2,84 +2,123 @@ import asyncio, os, tempfile, speech_recognition as sr, edge_tts
 from DataManager import DataManager
 from nlp import NLP
 from CityInfo import CityInfo
+from Disp import Disp
 
 
 class CommandManager:
     """
-    Continuously listens for a wake-word (“start” by default).  
-    When the wake-word is heard, the current command task (if any) is cancelled
-    and the remainder of the sentence is processed as a new command.
+    Continuous mode with wake-word (default) or MANUAL mode (keyboard input).
     """
 
-    def __init__(self, wake_word: str = "start"):
+    def __init__(self, wake_word: str = "start", manual: bool = False):
         # helpers / state --------------------------------------------------
-        self.WakeWord    = wake_word
-        self.Volume      = 80
-        self.running    = None                 # current Task
+        self.WakeWord  = wake_word
+        self.Manual    = manual
+        self.Volume    = 80
+        self.running   = None
 
         # subsystems -------------------------------------------------------
         self.DataManager = DataManager()
         self.NLP         = NLP()
         self.CityInfo    = CityInfo("486c05914b1d1a5c9ea00ce1568a64d6")
         self.Rec         = sr.Recognizer()
-        self.Mic         = sr.Microphone()
+        # do not touch audio hardware in MANUAL mode
+        self.Mic         = None if self.Manual else sr.Microphone()
+        self.Display     = Disp()
 
         print("--------------------------------------------------------------")
-        print("[DEBUG] Command Manager is ready")
+        print(f"[DEBUG] Command Manager is ready (MANUAL={self.Manual})")
 
+    async def start(self):
+        await self.Display.start()
 
-    # =============== continuous microphone loop ==========================
+    async def stop(self):
+        await self.Display.stop()
+
+    # =============== continuous input loop (mic or keyboard) ====================
     async def Listen_Loop(self):
-        def sync_listen():
-            with self.Mic as src:
-                self.Rec.adjust_for_ambient_noise(src)
-                audio = self.Rec.listen(src, timeout=30)
-            return self.Rec.recognize_google(audio, language="en-US")
+        if self.Manual:
+            # keyboard-driven loop
+            while True:
+                try:
+                    phrase = await asyncio.to_thread(input, "[MANUAL] > ")
+                    phrase = (phrase or "").strip()
+                    if not phrase:
+                        print("--------------------------------------------------------------")
+                        print("[DEBUG] Empty input; waiting...")
+                        continue
+                    print("--------------------------------------------------------------")
+                    print(f"[DEBUG] Heard (manual): {phrase}")
+                    yield phrase
+                except (EOFError, KeyboardInterrupt):
+                    print("--------------------------------------------------------------")
+                    print("[DEBUG] Manual input terminated")
+                    await asyncio.sleep(0.05)
+                    break
+        else:
+            # microphone-driven loop
+            def sync_listen():
+                with self.Mic as src:
+                    self.Rec.adjust_for_ambient_noise(src)
+                    audio = self.Rec.listen(src, timeout=30)
+                return self.Rec.recognize_google(audio, language="en-US")
 
-        while True:
-            try:
-                phrase = await asyncio.to_thread(sync_listen)
-                print("--------------------------------------------------------------")
-                print(f"[DEBUG] Heard: {phrase}")
-                yield phrase
-            except (sr.UnknownValueError, sr.WaitTimeoutError):
-                print("--------------------------------------------------------------")
-                print("[DEBUG] Listen timeout / unintelligible")
-            except sr.RequestError as e:
-                print("--------------------------------------------------------------")
-                print(f"[DEBUG] Google STT error: {e}")
+            while True:
+                try:
+                    phrase = await asyncio.to_thread(sync_listen)
+                    print("--------------------------------------------------------------")
+                    print(f"[DEBUG] Heard: {phrase}")
+                    yield phrase
+                except (sr.UnknownValueError, sr.WaitTimeoutError):
+                    print("--------------------------------------------------------------")
+                    print("[DEBUG] Listen timeout / unintelligible")
+                except sr.RequestError as e:
+                    print("--------------------------------------------------------------")
+                    print(f"[DEBUG] Google STT error: {e}")
 
-
-    # =============== Executes one command; may be cancelled at any time ======================
+    # =============== Executes one command; may be cancelled at any time =========
     async def Run_Command(self, command_text: str):
         intent = self.NLP.Interpret_Command(command_text)
         print("--------------------------------------------------------------")
         print(f"[DEBUG] Intent: {intent}")
 
         try:
+            display_task = None
             # --- sensor ---------------------------------------------------
             if intent == "sensor":
                 await self.DataManager.Measure_MicroClimate()
+                await self.Display.update_air_quality(self.DataManager.gas)
                 if self.DataManager.temp is None:
                     reply = "Sorry, I couldn't read the sensor data."
                 else:
                     air = "good" if self.DataManager.gas else "bad"
                     reply = (f"The average temperature is {self.DataManager.temp:.1f}°C and "
                              f"humidity is {self.DataManager.humidity:.1f}%. Air quality is {air}.")
+                display_task = asyncio.create_task(
+                    self.Display.show_sensor(self.DataManager.temp, self.DataManager.humidity)
+                )
 
             # --- time -----------------------------------------------------
             elif intent == "time":
                 city  = self.NLP.Extract_City(command_text) or "Seoul"
-                reply = self.CityInfo.Get_Time(city)
+                info  = self.CityInfo.Get_Time_Info(city)
+                reply = info["speech"]
+                display_task = asyncio.create_task(
+                    self.Display.show_city_time(info.get("hour"), info.get("minute"))
+                )
 
             # --- weather --------------------------------------------------
             elif intent == "weather":
                 city  = self.NLP.Extract_City(command_text) or "Seoul"
-                reply = await self.CityInfo.Get_Weather(city)
+                info  = await self.CityInfo.Get_Weather_Info(city)
+                reply = info["speech"]
+                display_task = asyncio.create_task(self.Display.show_weather(info))
 
             # --- volume ---------------------------------------------------
             elif intent == "volume":
                 reply = await self.handle_volume(command_text)
+                if reply.lower().startswith("volume set"):
+                    display_task = asyncio.create_task(self.Display.show_volume(self.Volume))
 
             # --- math -----------------------------------------------------
             elif intent == "calculate":
@@ -94,10 +133,13 @@ class CommandManager:
 
             print("--------------------------------------------------------------")
             print(f"[DEBUG] Reply: {reply}")
-            await self.Speak(reply)
+            speak_task = asyncio.create_task(self.Speak(reply))
+            if display_task:
+                await asyncio.gather(speak_task, display_task)
+            else:
+                await speak_task
 
         except asyncio.CancelledError:
-            # any long-running work or TTS is aborted instantly
             print("[DEBUG] Command task cancelled")
             raise
 
@@ -117,7 +159,7 @@ class CommandManager:
         )
         try:
             await proc.wait()
-        finally:                               # ensure cleanup on cancel
+        finally:
             proc.terminate()
             os.remove(path)
 
@@ -139,9 +181,8 @@ class CommandManager:
         return f"Volume set to {self.Volume} percent."
 
     async def Set_System_Volume(self, percent: int):
-        """Try common mixer controls; pick the first that works."""
         print("--------------------------------------------------------------")
-        print(f"[DEBUG] amixer → {percent}%")
+        print(f"[DEBUG] amixer -> {percent}%")
         for ctl in ("Master", "PCM", "Speaker", "Headphone"):
             proc = await asyncio.create_subprocess_exec(
                 "amixer", "-q", "-c", "3", "set", ctl, f"{percent}%",
@@ -153,7 +194,6 @@ class CommandManager:
                 print(f"[DEBUG] volume control '{ctl}' OK")
                 return
 
-        # fallback: first available simple control
         proc = await asyncio.create_subprocess_exec(
             "amixer", "-c", "3", "scontrols",
             stdout=asyncio.subprocess.PIPE,

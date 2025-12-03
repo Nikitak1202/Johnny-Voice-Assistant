@@ -4,7 +4,8 @@ from CommandManager import CommandManager
 
 
 async def main():
-    cm = CommandManager()
+    cm = CommandManager(manual=False)
+    await cm.start()
 
     try:
         async for phrase in cm.Listen_Loop():
@@ -25,7 +26,7 @@ async def main():
                 cm.running = asyncio.create_task(cm.Run_Command(cmd_txt))
 
     finally:
-        pass
+        await cm.stop()
 
 
 if __name__ == "__main__":
