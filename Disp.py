@@ -28,7 +28,7 @@ class Disp:
         device: Optional[object] = None,
         cascaded: int = 4,
         module_size: int = 8,
-        contrast: int = 10,
+        contrast: int = 20,
         time_provider: Optional[Callable[[], datetime]] = None,
         clock_interval: float = 1.0,
         blink_interval: float = 0.5,
@@ -71,9 +71,9 @@ class Disp:
             serial = spi(port=0, device=0, gpio=noop())
             device = max7219(
                 serial,
-                cascaded=cascaded,
-                block_orientation=-90,
-                blocks_arranged_in_reverse_order=True,
+                cascaded = cascaded,
+                block_orientation = -90,
+                blocks_arranged_in_reverse_order = False,
             )
             device.contrast(contrast)
 

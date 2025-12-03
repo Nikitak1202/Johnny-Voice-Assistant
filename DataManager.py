@@ -15,51 +15,69 @@ class DataManager:
 
         self.DHT11Pin = board.D17          # GPIO-17
         self.GasPin = 27                   # GPIO-27
+
+        # Create devices once
+        self._dht = adafruit_dht.DHT11(self.DHT11Pin)
+        self._gas = DigitalInputDevice(self.GasPin)
+
         print("------------------------------------------------------------------------\n")
         print("[DEBUG] DataManager initialised")
-
 
     # Parallel read of DHT11 and gas sensor
     async def Measure_MicroClimate(self):
         print("------------------------------------------------------------------------\n")
         print("[DEBUG] Measuring micro-climate")
-        dht_task = asyncio.create_task(self.ReadDHT11())
+
+        dht_task = asyncio.create_task(self.ReadDHT11(attempts=6, interval=2.2))
         gas_task = asyncio.create_task(self.ReadGas())
-        self.temp, self.humidity = await dht_task
-        self.gas = await gas_task
+
+        # Don't let exceptions kill the caller; fold them into None-values
+        dht_res, gas_res = await asyncio.gather(dht_task, gas_task, return_exceptions=True)
+
+        if isinstance(dht_res, Exception):
+            print("------------------------------------------------------------------------\n")
+            print(f"[DEBUG] DHT11 fatal error: {dht_res!r}")
+            self.temp, self.humidity = None, None
+        else:
+            self.temp, self.humidity = dht_res
+
+        if isinstance(gas_res, Exception):
+            print("------------------------------------------------------------------------\n")
+            print(f"[DEBUG] GAS read error: {gas_res!r}")
+            self.gas = None
+        else:
+            self.gas = gas_res
+
         print("------------------------------------------------------------------------\n")
         print(f"[DEBUG] Temp={self.temp}  Hum={self.humidity}  Gas={self.gas}")
-        #return json.dumps({"temperature": self.temp, "humidity": self.humidity, "gas": self.gas}
+
         return json.dumps({
             "temperature": self.temp,
             "humidity": self.humidity,
             "gas": self.gas
         })
 
-
     # Return digital value from MQ-sensor pin (1 = clean air)
     async def ReadGas(self):
-        return await asyncio.to_thread(lambda: DigitalInputDevice(self.GasPin).value)
+        return await asyncio.to_thread(lambda: self._gas.value)
 
-
-    # Average DHT11 temperature + humidity over <samples> reads
-    async def ReadDHT11(self, samples: int = 10):
+    # Average DHT11 temperature + humidity over several attempts
+    async def ReadDHT11(self, attempts: int = 6, interval: float = 2.2):
         def sync_read():
-            dht = adafruit_dht.DHT11(self.DHT11Pin)
             temps, hums = [], []
-            for _ in range(samples):
+            for _ in range(int(attempts)):
                 try:
-                    temps.append(dht.temperature)
-                    hums.append(dht.humidity)
+                    t = self._dht.temperature
+                    h = self._dht.humidity
+                    if (t is not None) and (h is not None):
+                        temps.append(float(t))
+                        hums.append(float(h))
                 except RuntimeError as err:
                     print("------------------------------------------------------------------------\n")
-                    print(f"[DEBUG] DHT11 error: {err.args[0]}")
-                    time.sleep(1)
-                    continue
-                time.sleep(1)
-            dht.exit()
-            avg_t = sum(temps) / len(temps) if temps else None
-            avg_h = sum(hums) / len(hums) if hums else None
+                    print(f"[DEBUG] DHT11 warn: {err.args[0]}")
+                time.sleep(max(2.0, float(interval)))  # DHT must not be polled faster than ~2s
+            avg_t = (sum(temps) / len(temps)) if temps else None
+            avg_h = (sum(hums) / len(hums)) if hums else None
             return avg_t, avg_h
 
         return await asyncio.to_thread(sync_read)

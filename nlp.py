@@ -40,7 +40,7 @@ class NLP:
 
         # replace st / st. at word boundaries > saint
         city = re.sub(r"\bst\.?\b", "saint", city)
-
+      
         return city.title()
 
 

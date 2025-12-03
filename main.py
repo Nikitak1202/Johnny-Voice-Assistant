@@ -4,7 +4,7 @@ from CommandManager import CommandManager
 
 
 async def main():
-    cm = CommandManager()
+    cm = CommandManager(manual=False)
     await cm.start()
 
     try:

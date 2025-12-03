@@ -7,27 +7,27 @@ from Disp import Disp
 
 class CommandManager:
     """
-    Continuously listens for a wake-word (“start” by default).  
-    When the wake-word is heard, the current command task (if any) is cancelled
-    and the remainder of the sentence is processed as a new command.
+    Continuous mode with wake-word (default) or MANUAL mode (keyboard input).
     """
 
-    def __init__(self, wake_word: str = "start"):
+    def __init__(self, wake_word: str = "start", manual: bool = False):
         # helpers / state --------------------------------------------------
-        self.WakeWord    = wake_word
-        self.Volume      = 80
-        self.running    = None                 # current Task
+        self.WakeWord  = wake_word
+        self.Manual    = manual
+        self.Volume    = 80
+        self.running   = None
 
         # subsystems -------------------------------------------------------
         self.DataManager = DataManager()
         self.NLP         = NLP()
         self.CityInfo    = CityInfo("486c05914b1d1a5c9ea00ce1568a64d6")
         self.Rec         = sr.Recognizer()
-        self.Mic         = sr.Microphone()
+        # do not touch audio hardware in MANUAL mode
+        self.Mic         = None if self.Manual else sr.Microphone()
         self.Display     = Disp()
 
         print("--------------------------------------------------------------")
-        print("[DEBUG] Command Manager is ready")
+        print(f"[DEBUG] Command Manager is ready (MANUAL={self.Manual})")
 
     async def start(self):
         await self.Display.start()
@@ -35,30 +35,48 @@ class CommandManager:
     async def stop(self):
         await self.Display.stop()
 
-
-    # =============== continuous microphone loop ==========================
+    # =============== continuous input loop (mic or keyboard) ====================
     async def Listen_Loop(self):
-        def sync_listen():
-            with self.Mic as src:
-                self.Rec.adjust_for_ambient_noise(src)
-                audio = self.Rec.listen(src, timeout=30)
-            return self.Rec.recognize_google(audio, language="en-US")
+        if self.Manual:
+            # keyboard-driven loop
+            while True:
+                try:
+                    phrase = await asyncio.to_thread(input, "[MANUAL] > ")
+                    phrase = (phrase or "").strip()
+                    if not phrase:
+                        print("--------------------------------------------------------------")
+                        print("[DEBUG] Empty input; waiting...")
+                        continue
+                    print("--------------------------------------------------------------")
+                    print(f"[DEBUG] Heard (manual): {phrase}")
+                    yield phrase
+                except (EOFError, KeyboardInterrupt):
+                    print("--------------------------------------------------------------")
+                    print("[DEBUG] Manual input terminated")
+                    await asyncio.sleep(0.05)
+                    break
+        else:
+            # microphone-driven loop
+            def sync_listen():
+                with self.Mic as src:
+                    self.Rec.adjust_for_ambient_noise(src)
+                    audio = self.Rec.listen(src, timeout=30)
+                return self.Rec.recognize_google(audio, language="en-US")
 
-        while True:
-            try:
-                phrase = await asyncio.to_thread(sync_listen)
-                print("--------------------------------------------------------------")
-                print(f"[DEBUG] Heard: {phrase}")
-                yield phrase
-            except (sr.UnknownValueError, sr.WaitTimeoutError):
-                print("--------------------------------------------------------------")
-                print("[DEBUG] Listen timeout / unintelligible")
-            except sr.RequestError as e:
-                print("--------------------------------------------------------------")
-                print(f"[DEBUG] Google STT error: {e}")
+            while True:
+                try:
+                    phrase = await asyncio.to_thread(sync_listen)
+                    print("--------------------------------------------------------------")
+                    print(f"[DEBUG] Heard: {phrase}")
+                    yield phrase
+                except (sr.UnknownValueError, sr.WaitTimeoutError):
+                    print("--------------------------------------------------------------")
+                    print("[DEBUG] Listen timeout / unintelligible")
+                except sr.RequestError as e:
+                    print("--------------------------------------------------------------")
+                    print(f"[DEBUG] Google STT error: {e}")
 
-
-    # =============== Executes one command; may be cancelled at any time ======================
+    # =============== Executes one command; may be cancelled at any time =========
     async def Run_Command(self, command_text: str):
         intent = self.NLP.Interpret_Command(command_text)
         print("--------------------------------------------------------------")
@@ -122,7 +140,6 @@ class CommandManager:
                 await speak_task
 
         except asyncio.CancelledError:
-            # any long-running work or TTS is aborted instantly
             print("[DEBUG] Command task cancelled")
             raise
 
@@ -142,7 +159,7 @@ class CommandManager:
         )
         try:
             await proc.wait()
-        finally:                               # ensure cleanup on cancel
+        finally:
             proc.terminate()
             os.remove(path)
 
@@ -164,9 +181,8 @@ class CommandManager:
         return f"Volume set to {self.Volume} percent."
 
     async def Set_System_Volume(self, percent: int):
-        """Try common mixer controls; pick the first that works."""
         print("--------------------------------------------------------------")
-        print(f"[DEBUG] amixer → {percent}%")
+        print(f"[DEBUG] amixer -> {percent}%")
         for ctl in ("Master", "PCM", "Speaker", "Headphone"):
             proc = await asyncio.create_subprocess_exec(
                 "amixer", "-q", "-c", "3", "set", ctl, f"{percent}%",
@@ -178,7 +194,6 @@ class CommandManager:
                 print(f"[DEBUG] volume control '{ctl}' OK")
                 return
 
-        # fallback: first available simple control
         proc = await asyncio.create_subprocess_exec(
             "amixer", "-c", "3", "scontrols",
             stdout=asyncio.subprocess.PIPE,
