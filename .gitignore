@@ -1,0 +1,49 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment and Python build artifacts
+bin/
+lib/
+lib64/
+pyvenv.cfg
+.Python
+pip-wheel-metadata/
+pip-log.txt
+
+# Site-packages
+lib/python*/site-packages/
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+*.egg
+*.whl
+
+# Tests, coverage and tox
+.tox/
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# IDEs and editors
+.vscode/
+.idea/
+
+# macOS
+.DS_Store
+
+# Environment files
+.env
+.env.*
+
+# Logs
+*.log
+
+# Misc
+*.pyc
+*.pyo
+

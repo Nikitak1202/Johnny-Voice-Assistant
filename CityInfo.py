@@ -1,6 +1,7 @@
-# Collects city-related info (time + weather) � weather NO cache
+# Collects city-related info (cached time + weather)
 import aiohttp, requests
 from datetime import datetime, timedelta, timezone
+
 
 COUNTRY_CODES = {
     "russia": "RU", "russian federation": "RU", "rus": "RU",
@@ -17,8 +18,9 @@ class CityInfo:
     def __init__(self, api_key: str):
         self.api_key   = api_key
         self.base_url  = "http://api.openweathermap.org/data/2.5/weather"
-        self.time_cache = {}          # only for timezone reuse
+        self.time_cache = {}         
         print("[DEBUG] CityInfo ready")
+
 
     # ---------------- weather (always HTTP) ----------------
     async def Get_Weather_Info(self, location: str = "Seoul") -> dict:
@@ -60,9 +62,11 @@ class CityInfo:
             "description": desc,
         }
 
+
     async def Get_Weather(self, location: str = "Seoul") -> str:
         info = await self.Get_Weather_Info(location)
         return info["speech"]
+
 
     # ---------------- time (uses cache) --------------------
     def Get_Time_Info(self, location: str = "Seoul") -> dict:
@@ -106,19 +110,23 @@ class CityInfo:
             "minute": local.minute,
         }
 
+
     def Get_Time(self, location: str = "Seoul") -> str:
         info = self.Get_Time_Info(location)
         return info["speech"]
+
 
     # ---------- helper: build params ---------------
     def params(self, city: str, cc: str | None):
         q = f"{city},{cc}" if cc else city
         return {"q": q, "appid": self.api_key, "units": "metric"}
 
+
     # ---------- helper: cache key ------------------
     @staticmethod
     def cache_key(city: str, cc: str | None):
         return f"{city.lower()}|{(cc or '').lower()}"
+
 
     # ---------- helper: split "city[, country]" ----
     def split_location(self, location: str):
@@ -136,4 +144,5 @@ class CityInfo:
             country_raw.lower(),
             country_raw.upper() if len(country_raw) == 2 else None
         )
+        
         return city, cc, country_raw.title()

@@ -16,6 +16,7 @@ class _MemoryDevice:
         self.height = height
         self._last_frame: List[List[int]] = [[0] * width for _ in range(height)]
 
+
     def show(self, frame: List[List[int]]) -> None:
         self._last_frame = _copy_frame(frame)
 
@@ -57,6 +58,7 @@ class Disp:
         print("------------------------------------------------------------------------")
         print("[DEBUG] Display module initialised")
 
+
     # ------------------------------------------------------------------ utils
     def _create_device(self, cascaded: int, module_size: int, contrast: int):
         try:
@@ -97,8 +99,10 @@ class Disp:
             print("[DEBUG] Falling back to memory framebuffer")
             return _MemoryDevice(cascaded * module_size, module_size)
 
+
     def _blank_frame(self) -> List[List[int]]:
         return [[0] * self.width for _ in range(self.height)]
+
 
     def _glyphs(self) -> dict:
         return {
@@ -410,6 +414,7 @@ class Disp:
             ],
         }
 
+
     def _render_text(self, text: str) -> List[List[int]]:
         glyphs = self._glyphs()
         columns: List[int] = []
@@ -443,6 +448,7 @@ class Disp:
 
         return frame
 
+
     # ---------------------------------------------------------------- animations
     def _pattern_frame(self, pattern: Iterable[str]) -> List[List[int]]:
         rows = list(pattern)
@@ -462,7 +468,9 @@ class Disp:
                     ty = y + y_offset
                     if 0 <= tx < self.width and 0 <= ty < self.height:
                         frame[ty][tx] = 1
+
         return frame
+
 
     def _sun_frames(self) -> List[List[List[int]]]:
         patterns = [
@@ -489,6 +497,7 @@ class Disp:
         ]
         return [self._pattern_frame(p) for p in patterns]
 
+
     def _cloud_frames(self) -> List[List[List[int]]]:
         patterns = [
             [
@@ -513,6 +522,7 @@ class Disp:
             ],
         ]
         return [self._pattern_frame(p) for p in patterns]
+
 
     def _rain_frames(self) -> List[List[List[int]]]:
         patterns = [
@@ -539,6 +549,7 @@ class Disp:
         ]
         return [self._pattern_frame(p) for p in patterns]
 
+
     def _snow_frames(self) -> List[List[List[int]]]:
         patterns = [
             [
@@ -563,6 +574,7 @@ class Disp:
             ],
         ]
         return [self._pattern_frame(p) for p in patterns]
+
 
     def _fog_frames(self) -> List[List[List[int]]]:
         patterns = [
@@ -614,6 +626,7 @@ class Disp:
         ]
         return [self._pattern_frame(p) for p in patterns]
 
+
     def _weather_animation(self, condition: str):
         kind = condition.lower()
         if kind in {"clear"}:
@@ -629,6 +642,8 @@ class Disp:
         if kind in {"mist", "fog", "smoke", "haze", "dust", "sand", "ash"}:
             return self._fog_frames(), 0.3, 6
         return [], 0.0, 0
+
+
     # ---------------------------------------------------------------- runtime
     async def start(self):
         if self._clock_task and not self._clock_task.done():
@@ -637,6 +652,7 @@ class Disp:
         print("[DEBUG] Display loop starting")
         self._clock_task = asyncio.create_task(self._clock_loop())
         self._blink_task = asyncio.create_task(self._blink_loop())
+
 
     async def stop(self):
         print("------------------------------------------------------------------------")
@@ -651,6 +667,7 @@ class Disp:
         self._blink_task = None
         await self._set_frame(self._blank_frame())
 
+
     async def _clock_loop(self):
         try:
             while True:
@@ -662,6 +679,7 @@ class Disp:
                 await asyncio.sleep(self._clock_interval)
         except asyncio.CancelledError:
             raise
+
 
     async def _blink_loop(self):
         try:
@@ -678,10 +696,12 @@ class Disp:
         except asyncio.CancelledError:
             raise
 
+
     async def _set_frame(self, frame: List[List[int]]):
         async with self._render_lock:
             self._desired_frame = _copy_frame(frame)
             await self._apply_frame_locked()
+
 
     async def _apply_frame_locked(self):
         frame = self._desired_frame
@@ -690,12 +710,15 @@ class Disp:
         await asyncio.to_thread(self.device.show, frame)
         self._last_frame = _copy_frame(frame)
 
+
     # ---------------------------------------------------------------- helpers
     def render_time_frame(self, hour: int, minute: int) -> List[List[int]]:
         return self._render_text(f"{hour:02d}:{minute:02d}")
 
+
     def render_text_frame(self, text: str) -> List[List[int]]:
         return self._render_text(text)
+
 
     async def update_air_quality(self, gas_value: Optional[int]):
         if gas_value is None:
@@ -707,16 +730,19 @@ class Disp:
                 self._blink_phase = False
             await self._apply_frame_locked()
 
+
     async def _hold_text(self, text: str, duration: float):
         frame = self._render_text(text)
         await self._set_frame(frame)
         await asyncio.sleep(duration)
+
 
     async def _run_animation(self, frames: List[List[List[int]]], delay: float, cycles: int):
         for _ in range(cycles):
             for frame in frames:
                 await self._set_frame(frame)
                 await asyncio.sleep(delay)
+
 
     async def _takeover(self):
         class _Takeover:
@@ -735,6 +761,7 @@ class Disp:
                     self.outer._override_lock.release()
 
         return _Takeover(self)
+
 
     # ---------------------------------------------------------------- public API
     async def show_weather(self, info: dict):
@@ -755,6 +782,7 @@ class Disp:
             for text in texts:
                 await self._hold_text(text, 1.6)
 
+
     async def show_city_time(self, hour: Optional[int], minute: Optional[int]):
         async with await self._takeover():
             if hour is None or minute is None:
@@ -764,9 +792,11 @@ class Disp:
                 await self._set_frame(frame)
                 await asyncio.sleep(2.2)
 
+
     async def show_volume(self, percent: int):
         async with await self._takeover():
             await self._hold_text(f"{percent}", 2.0)
+
 
     async def show_sensor(self, temperature: Optional[float], humidity: Optional[float]):
         async with await self._takeover():
@@ -779,6 +809,7 @@ class Disp:
                     await self._hold_text(label, 1.6)
                 if humidity is not None:
                     await self._hold_text(f"H{int(round(humidity)):02d}", 1.6)
+
 
     def last_frame(self) -> List[List[int]]:
         return _copy_frame(self._last_frame)

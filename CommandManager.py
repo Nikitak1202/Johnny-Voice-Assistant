@@ -29,11 +29,14 @@ class CommandManager:
         print("--------------------------------------------------------------")
         print(f"[DEBUG] Command Manager is ready (MANUAL={self.Manual})")
 
+
     async def start(self):
         await self.Display.start()
 
+
     async def stop(self):
         await self.Display.stop()
+
 
     # =============== continuous input loop (mic or keyboard) ====================
     async def Listen_Loop(self):
@@ -71,10 +74,11 @@ class CommandManager:
                     yield phrase
                 except (sr.UnknownValueError, sr.WaitTimeoutError):
                     print("--------------------------------------------------------------")
-                    #print("[DEBUG] Listen timeout / unintelligible")
+                    print("[DEBUG] Listen timeout / unintelligible")
                 except sr.RequestError as e:
                     print("--------------------------------------------------------------")
                     print(f"[DEBUG] Google STT error: {e}")
+
 
     # =============== Executes one command; may be cancelled at any time =========
     async def Run_Command(self, command_text: str):
@@ -143,6 +147,7 @@ class CommandManager:
             print("[DEBUG] Command task cancelled")
             raise
 
+
     # =============== Generate TTS and speak ======================================
     async def Speak(self, text: str):
         print("--------------------------------------------------------------")
@@ -163,6 +168,7 @@ class CommandManager:
             proc.terminate()
             os.remove(path)
 
+
     # =============== volume helpers ======================================
     async def handle_volume(self, text: str):
         action = self.NLP.Extract_Volume(text)
@@ -179,6 +185,7 @@ class CommandManager:
 
         await self.Set_System_Volume(self.Volume)
         return f"Volume set to {self.Volume} percent."
+
 
     async def Set_System_Volume(self, percent: int):
         print("--------------------------------------------------------------")

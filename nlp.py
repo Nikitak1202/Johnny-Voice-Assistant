@@ -1,5 +1,6 @@
 import re
 
+
 class NLP:
     # intent detection -----------------------------------------------------
     def Interpret_Command(self, text: str) -> str:

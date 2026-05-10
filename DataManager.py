@@ -23,6 +23,7 @@ class DataManager:
         print("------------------------------------------------------------------------\n")
         print("[DEBUG] DataManager initialised")
 
+
     # Parallel read of DHT11 and gas sensor
     async def Measure_MicroClimate(self):
         print("------------------------------------------------------------------------\n")
@@ -57,9 +58,11 @@ class DataManager:
             "gas": self.gas
         })
 
+
     # Return digital value from MQ-sensor pin (1 = clean air)
     async def ReadGas(self):
         return await asyncio.to_thread(lambda: self._gas.value)
+
 
     # Average DHT11 temperature + humidity over several attempts
     async def ReadDHT11(self, attempts: int = 6, interval: float = 2.2):
