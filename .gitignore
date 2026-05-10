@@ -47,3 +47,6 @@ htmlcov/
 *.pyc
 *.pyo
 
+# Other
+lib64/
+.venv/
