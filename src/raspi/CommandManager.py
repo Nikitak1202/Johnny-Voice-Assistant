@@ -154,11 +154,23 @@ class CommandManager:
         print(f"[DEBUG] Speaking: {text}")
         with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as fp:
             mp3_path = fp.name
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as fp:
+            wav_path = fp.name
 
         await edge_tts.Communicate(text, voice="en-US-JennyNeural").save(mp3_path)
 
+        # Convert MP3 to WAV with volume adjustment
+        volume_scale = volume / 100.0
         proc = await asyncio.create_subprocess_exec(
-            "ffplay", "-nodisp", "-autoexit", "-loglevel", "error", mp3_path,
+            "ffmpeg", "-y", "-i", mp3_path, "-af", f"volume={volume_scale}", "-q:a", "9", wav_path,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        await proc.wait()
+
+        # Play WAV file with ffplay
+        proc = await asyncio.create_subprocess_exec(
+            "ffplay", "-nodisp", "-autoexit", "-loglevel", "error", wav_path,
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.DEVNULL,
         )
@@ -168,6 +180,7 @@ class CommandManager:
             if proc.returncode is None:
                 proc.terminate()
             os.remove(mp3_path)
+            os.remove(wav_path)
 
 
     # =============== volume helpers ======================================
