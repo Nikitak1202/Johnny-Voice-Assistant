@@ -1,0 +1,21 @@
+services:
+  raspi:
+    build: .
+    container_name: johnny_raspi
+    restart: unless-stopped
+    # For audio and GPIO access it's often necessary to use host networking
+    # and elevated privileges — see README.DOCKER.md for details.
+    network_mode: host
+    privileged: true
+    devices:
+      - /dev/snd:/dev/snd
+      - /dev/gpiomem:/dev/gpiomem
+    volumes:
+      - ./data:/opt/app/data
+      - ./configs:/opt/app/configs
+      - /run/user/1000/pulse:/run/user/1000/pulse:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+      - HARDWARE_MODE=false
+      - PULSE_SERVER=unix:/run/user/1000/pulse/native
+    command: ["/opt/app/scripts/run.sh"]

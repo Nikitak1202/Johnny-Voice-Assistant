@@ -1,8 +1,8 @@
 import asyncio, os, tempfile, speech_recognition as sr, edge_tts
-from DataManager import DataManager
-from nlp import NLP
-from CityInfo import CityInfo
-from Disp import Disp
+from .DataManager import DataManager
+from .nlp import NLP
+from .CityInfo import CityInfo
+from .Disp import Disp
 
 
 class CommandManager:
@@ -137,7 +137,7 @@ class CommandManager:
 
             print("--------------------------------------------------------------")
             print(f"[DEBUG] Reply: {reply}")
-            speak_task = asyncio.create_task(self.Speak(reply))
+            speak_task = asyncio.create_task(self.Speak(reply, self.Volume))
             if display_task:
                 await asyncio.gather(speak_task, display_task)
             else:
@@ -149,24 +149,25 @@ class CommandManager:
 
 
     # =============== Generate TTS and speak ======================================
-    async def Speak(self, text: str):
+    async def Speak(self, text: str, volume: int = 80):
         print("--------------------------------------------------------------")
         print(f"[DEBUG] Speaking: {text}")
         with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as fp:
-            path = fp.name
+            mp3_path = fp.name
 
-        await edge_tts.Communicate(text, voice="en-US-JennyNeural").save(path)
+        await edge_tts.Communicate(text, voice="en-US-JennyNeural").save(mp3_path)
 
         proc = await asyncio.create_subprocess_exec(
-            "mpg123", "-q", "-a", "plughw:3,0", path,
+            "ffplay", "-nodisp", "-autoexit", "-loglevel", "error", mp3_path,
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.DEVNULL,
         )
         try:
             await proc.wait()
         finally:
-            proc.terminate()
-            os.remove(path)
+            if proc.returncode is None:
+                proc.terminate()
+            os.remove(mp3_path)
 
 
     # =============== volume helpers ======================================
@@ -188,32 +189,23 @@ class CommandManager:
 
 
     async def Set_System_Volume(self, percent: int):
-        print("--------------------------------------------------------------")
-        print(f"[DEBUG] amixer -> {percent}%")
+        # Try PulseAudio first (modern systems)
+        proc = await asyncio.create_subprocess_exec(
+            "pactl", "set-sink-volume", "@DEFAULT_SINK@", f"{percent}%",
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        await proc.wait()
+        if proc.returncode == 0:
+            return
+
+        # Fall back to amixer for traditional ALSA
         for ctl in ("Master", "PCM", "Speaker", "Headphone"):
             proc = await asyncio.create_subprocess_exec(
-                "amixer", "-q", "-c", "3", "set", ctl, f"{percent}%",
+                "amixer", "-q", "set", ctl, f"{percent}%",
                 stdout=asyncio.subprocess.DEVNULL,
                 stderr=asyncio.subprocess.DEVNULL,
             )
             await proc.wait()
             if proc.returncode == 0:
-                print(f"[DEBUG] volume control '{ctl}' OK")
                 return
-
-        proc = await asyncio.create_subprocess_exec(
-            "amixer", "-c", "3", "scontrols",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.DEVNULL,
-        )
-        out, _ = await proc.communicate()
-        first = out.decode().split("'")[1] if out else None
-        if first:
-            await asyncio.create_subprocess_exec(
-                "amixer", "-q", "-c", "3", "set", first, f"{percent}%",
-                stdout=asyncio.subprocess.DEVNULL,
-                stderr=asyncio.subprocess.DEVNULL,
-            )
-            print(f"[DEBUG] volume control '{first}' OK")
-        else:
-            print("[DEBUG] no mixer control found")

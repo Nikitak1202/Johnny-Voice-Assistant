@@ -1,1 +1,0 @@
-python main.py 2> >(grep -v -E "ALSA|jack|pulseaudio|Jack|Cannot" >&2)

@@ -2,9 +2,7 @@
 import asyncio
 import time
 import json
-import board
-import adafruit_dht
-from gpiozero import DigitalInputDevice
+import os
 
 
 class DataManager:
@@ -12,22 +10,48 @@ class DataManager:
         self.temp = None
         self.humidity = None
         self.gas = None
+        self.hardware_available = os.getenv("HARDWARE_MODE", "true").lower() == "true"
 
-        self.DHT11Pin = board.D17          # GPIO-17
-        self.GasPin = 27                   # GPIO-27
+        self.DHT11Pin = None
+        self.GasPin = 27
 
-        # Create devices once
-        self._dht = adafruit_dht.DHT11(self.DHT11Pin)
-        self._gas = DigitalInputDevice(self.GasPin)
+        if self.hardware_available:
+            try:
+                import board
+                import adafruit_dht
+                from gpiozero import DigitalInputDevice
+
+                self.DHT11Pin = board.D17
+                self._dht = adafruit_dht.DHT11(self.DHT11Pin)
+                self._gas = DigitalInputDevice(self.GasPin)
+            except (ImportError, RuntimeError, Exception) as e:
+                print(f"[DEBUG] Hardware initialization failed: {e}. Running in mock mode.")
+                self.hardware_available = False
+                self._dht = None
+                self._gas = None
+        else:
+            self._dht = None
+            self._gas = None
 
         print("------------------------------------------------------------------------\n")
-        print("[DEBUG] DataManager initialised")
+        print(f"[DEBUG] DataManager initialised (hardware_available={self.hardware_available})")
 
 
     # Parallel read of DHT11 and gas sensor
     async def Measure_MicroClimate(self):
         print("------------------------------------------------------------------------\n")
         print("[DEBUG] Measuring micro-climate")
+
+        if not self.hardware_available:
+            print("[DEBUG] Hardware not available, returning mock sensor data")
+            self.temp = 22.5
+            self.humidity = 55.0
+            self.gas = 1
+            return json.dumps({
+                "temperature": self.temp,
+                "humidity": self.humidity,
+                "gas": self.gas
+            })
 
         dht_task = asyncio.create_task(self.ReadDHT11(attempts=6, interval=2.2))
         gas_task = asyncio.create_task(self.ReadGas())

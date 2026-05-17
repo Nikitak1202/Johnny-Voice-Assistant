@@ -1,6 +1,6 @@
 import asyncio
 import contextlib
-from CommandManager import CommandManager
+from .CommandManager import CommandManager
 
 
 async def main():

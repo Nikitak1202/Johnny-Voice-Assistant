@@ -49,4 +49,5 @@ htmlcov/
 
 # Other
 lib64/
-.venv/
+venv/
+.github/
